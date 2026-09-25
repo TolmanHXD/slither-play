@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slither</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@340;460;560&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07060c;
+    --ink: #f4f0ff;
+    --muted: #a99bc4;
+    --line: rgba(186, 140, 255, 0.22);
+    --violet: #b26bff;
+    --violet-2: #7a3cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: Outfit, sans-serif;
+    background:
+      radial-gradient(900px 500px at 8% -10%, rgba(140, 60, 255, 0.45), transparent 60%),
+      radial-gradient(700px 420px at 100% 0%, rgba(70, 20, 140, 0.55), transparent 55%),
+      var(--bg);
+  }
+  body:before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(circle at 50% 20%, black, transparent 75%);
+  }
+  main { position: relative; max-width: 1180px; margin: 0 auto; padding: 36px 22px 64px; }
+  header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-end; margin-bottom: 28px; }
+  h1 { font-family: Syne, sans-serif; font-size: clamp(42px, 6vw, 76px); line-height: 0.9; margin: 0; letter-spacing: -0.04em; }
+  h1 span { color: var(--violet); }
+  .lede { color: var(--muted); max-width: 360px; margin: 8px 0 0; }
+  .pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: rgba(12, 8, 22, 0.7); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b6478; box-shadow: 0 0 0 0 rgba(178, 107, 255, 0.5); }
+  .pill.on .dot { background: #c084fc; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(178, 107, 255, 0); } }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 18px;
+    backdrop-filter: blur(10px);
+  }
+  label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px; }
+  input {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.35);
+    color: white;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font: inherit;
+    outline: none;
+  }
+  input:focus { border-color: var(--violet); }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  button {
+    border: 0;
+    border-radius: 14px;
+    padding: 13px 16px;
+    font: inherit;
+    font-weight: 560;
+    cursor: pointer;
+  }
+  .go { flex: 1; color: white; background: linear-gradient(135deg, var(--violet), var(--violet-2)); box-shadow: 0 10px 30px rgba(122, 60, 255, 0.35); }
+  .stop { color: #f3e9ff; background: transparent; border: 1px solid var(--line); }
+  .msg { min-height: 22px; color: #d7c4ff; font-size: 14px; margin-top: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat b { display: block; font-family: Syne, sans-serif; font-size: 34px; letter-spacing: -0.04em; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 460; padding: 8px 6px; }
+  td { padding: 9px 6px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .tag { border-radius: 999px; padding: 3px 8px; font-size: 12px; }
+  .ok { color: #d7b6ff; background: rgba(178, 107, 255, 0.16); }
+  .rejete { color: #ffb4c8; background: rgba(255, 80, 120, 0.14); }
+  .melange { color: #ffe0a8; background: rgba(255, 190, 80, 0.14); }
+  .attente { color: var(--muted); background: rgba(255,255,255,0.05); }
+  .scroll { max-height: 420px; overflow: auto; }
+  @media (max-width: 900px) {
+    .grid, .stats { grid-template-columns: 1fr 1fr; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Slither<br><span>control</span></h1>
+      <p class="lede">Envoie tes bots, suis les proxys, et regarde qui est encore en jeu.</p>
+    </div>
+    <div class="pill" id="pill"><span class="dot"></span><span id="pillText">hors ligne</span></div>
+  </header>
+  <section class="stats" id="stats"></section>
+  <section class="grid" style="margin-top:18px">
+    <form class="card" id="form">
+      <label>Pseudo</label>
+      <input name="name" value="free israel">
+      <label>Count</label>
+      <input name="count" type="number" min="1" max="200" value="30">
+      <label>Serveur</label>
+      <input name="server" type="number" value="5724">
+      <label>Skin</label>
+      <input name="skin" type="number" min="0" max="64" value="61">
+      <div class="actions">
+        <button class="go" type="submit">Envoyer les bots</button>
+        <button class="stop" id="stop" type="button">Stop</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </form>
+    <div class="card">
+      <strong>Proxys de cette vague</strong>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>IP</th><th>OK</th><th>Rejet</th><th>En jeu</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const stats = [
+  ["count", "Count"],
+  ["alive", "En jeu"],
+  ["connecting", "Connexion"],
+  ["dead", "Morts maintenant"],
+  ["deaths", "Morts total"],
+  ["proxyTotal", "Proxys en stock"],
+  ["proxyOk", "Proxys ok"],
+  ["proxyBad", "Proxys rejetes"]
+];
+function card(label, value) {
+  return `<article class="stat card"><b>${value ?? 0}</b><span>${label}</span></article>`;
+}
+async function refresh() {
+  const data = await (await fetch("/api/status")).json();
+  document.getElementById("stats").innerHTML = stats.map(([key, label]) => card(label, data[key])).join("");
+  document.getElementById("pill").classList.toggle("on", !!data.running);
+  document.getElementById("pillText").textContent = data.running ? `en ligne · serveur ${data.server || "-"}` : "hors ligne";
+  document.getElementById("rows").innerHTML = (data.rows || []).map(row =>
+    `<tr><td>${row.host}</td><td>${row.ok}</td><td>${row.fail}</td><td>${row.live}</td><td><span class="tag ${row.state}">${row.state}</span></td></tr>`
+  ).join("") || `<tr><td colspan="5">Aucun bot lancé.</td></tr>`;
+}
+document.getElementById("form").onsubmit = async (event) => {
+  event.preventDefault();
+  const body = Object.fromEntries(new FormData(event.target));
+  const res = await fetch("/api/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  document.getElementById("msg").textContent = data.message || "";
+  refresh();
+};
+document.getElementById("stop").onclick = async () => {
+  const res = await fetch("/api/stop", { method: "POST", body: "{}" });
+  const data = await res.json();
+  document.getElementById("msg").textContent = data.message || "";
+  refresh();
+};
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>

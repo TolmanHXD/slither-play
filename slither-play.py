@@ -1885,6 +1885,157 @@ def start_tracer_server(game):
     threading.Thread(target=tunnel, daemon=True).start()
 
 
+_runner = {"thread": None}
+
+
+def bots_running():
+    thread = _runner["thread"]
+    return thread is not None and thread.is_alive()
+
+
+def snapshot_state(game):
+    with game.lock:
+        pilots = list(game.pilots)
+        server_id = game.server_id
+        deaths = game.deaths
+        status = game.status
+        stats = {host: dict(row) for host, row in game.proxy_stats.items()}
+        proxy_total = getattr(game, "proxy_total", 0)
+    alive = sum(pilot.alive for pilot in pilots)
+    linking = sum(pilot.status == "connexion" for pilot in pilots)
+    dead_now = sum(pilot.status == "Mort" for pilot in pilots)
+    hosts = []
+    for pilot in pilots:
+        host = pilot.proxy["host"] if pilot.proxy else "direct"
+        if host not in hosts:
+            hosts.append(host)
+    rows = []
+    for host in hosts:
+        row = stats.get(host, {"ok": 0, "fail": 0})
+        live = sum(
+            pilot.alive and ((pilot.proxy and pilot.proxy["host"] == host) or (not pilot.proxy and host == "direct"))
+            for pilot in pilots
+        )
+        if row["ok"] and not row["fail"]:
+            state = "ok"
+        elif row["ok"]:
+            state = "melange"
+        elif row["fail"]:
+            state = "rejete"
+        else:
+            state = "attente"
+        rows.append({"host": host, "ok": row["ok"], "fail": row["fail"], "live": live, "state": state})
+    return {
+        "running": bots_running(),
+        "server": server_id,
+        "count": len(pilots),
+        "alive": alive,
+        "connecting": linking,
+        "dead": dead_now,
+        "deaths": deaths,
+        "status": status,
+        "proxies": len(hosts),
+        "proxyTotal": proxy_total,
+        "proxyOk": sum(1 for row in rows if row["ok"]),
+        "proxyBad": sum(1 for row in rows if row["fail"] and not row["ok"]),
+        "connOk": sum(row["ok"] for row in rows),
+        "connBad": sum(row["fail"] for row in rows),
+        "rows": rows,
+    }
+
+
+def launch_bots(game, name, count, server, skin):
+    if bots_running():
+        return False, "Des bots tournent deja. Arrete-les d'abord."
+    if not 1 <= count <= 200:
+        return False, "Le count doit etre entre 1 et 200."
+    if skin is not None and not 0 <= skin <= 64:
+        return False, "Skin entre 0 et 64."
+    game.quit = False
+    with game.lock:
+        game.deaths = 0
+        game.proxy_stats = {}
+        game.pilots = []
+        game.status = "connexion"
+        game.server_id = server
+    names = pilot_names(name, count)
+    _runner["thread"] = threading.Thread(
+        target=network, args=(game, names, server, skin), daemon=True
+    )
+    _runner["thread"].start()
+    return True, "Bots lances."
+
+
+def stop_bots(game):
+    game.quit = True
+    return True, "Arret demande."
+
+
+def serve_dashboard(game):
+    port = int(os.environ.get("PORT", "8080"))
+    page_path = os.path.join(ROOT, "dashboard.html")
+
+    class Handler(BaseHTTPRequestHandler):
+        def _send(self, code, body, content_type):
+            data = body if isinstance(body, bytes) else body.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            path = self.path.split("?", 1)[0]
+            if path == "/api/status":
+                self._send(200, json.dumps(snapshot_state(game)), "application/json")
+                return
+            if path not in ("/", "/dashboard"):
+                self._send(404, "introuvable", "text/plain; charset=utf-8")
+                return
+            try:
+                html = open(page_path, encoding="utf-8").read()
+            except OSError:
+                html = "<p>dashboard manquant</p>"
+            self._send(200, html, "text/html; charset=utf-8")
+
+        def do_POST(self):
+            path = self.path.split("?", 1)[0]
+            length = int(self.headers.get("Content-Length", "0") or 0)
+            raw = self.rfile.read(max(0, min(length, 8000))) if length else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                data = {}
+            if path == "/api/stop":
+                ok, message = stop_bots(game)
+            elif path == "/api/start":
+                try:
+                    count = int(data.get("count") or 1)
+                    server = int(data.get("server") or 0)
+                    skin_raw = data.get("skin")
+                    skin = None if skin_raw in (None, "", "random") else int(skin_raw)
+                except (TypeError, ValueError):
+                    self._send(400, json.dumps({"ok": False, "message": "Nombres invalides."}), "application/json")
+                    return
+                ok, message = launch_bots(game, str(data.get("name") or "jjj"), count, server, skin)
+            else:
+                self._send(404, json.dumps({"ok": False, "message": "introuvable"}), "application/json")
+                return
+            self._send(200, json.dumps({"ok": ok, "message": message}), "application/json")
+
+        def log_message(self, fmt, *args):
+            return
+
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    except OSError as exc:
+        print(f"dashboard indisponible: {exc}", flush=True)
+        return
+    print(f"dashboard sur le port {port}", flush=True)
+    server.serve_forever()
+
+
 def draw_board(game):
     with game.lock:
         pilots = list(game.pilots)
@@ -1942,6 +2093,7 @@ def main():
     parser.add_argument("--skin", type=int, default=None, help="numero du skin, de 0 a 64")
     parser.add_argument("--skins", action="store_true", help="affiche la liste des skins et quitte")
     parser.add_argument("--board", action="store_true", help="tableau dans la console, sans fenetre")
+    parser.add_argument("--web", action="store_true", help="dashboard web, sans fenetre")
     args = parser.parse_args()
     if args.skins:
         for number, name in SKINS:
@@ -1950,7 +2102,11 @@ def main():
     if args.skin is not None and not 0 <= args.skin <= 64:
         parser.error("skin entre 0 et 64")
     game = Game()
-    game.board_mode = args.board
+    game.board_mode = args.board or args.web
+    game.proxy_total = len(load_proxies(PROXY_FILE))
+    if args.web:
+        serve_dashboard(game)
+        return
     if not args.board:
         start_tracer_server(game)
     names = pilot_names(args.name, args.count)
