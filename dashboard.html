@@ -4,168 +4,213 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Slither</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@340;460;560&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #07060c;
-    --ink: #f4f0ff;
-    --muted: #a99bc4;
-    --line: rgba(186, 140, 255, 0.22);
-    --violet: #b26bff;
-    --violet-2: #7a3cff;
-  }
+  :root { --bg:#100c09; --card:#1a1410; --line:#3a2a22; --ink:#fff4ec; --muted:#c9b2a4; --orange:#ff7a1a; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    color: var(--ink);
-    font-family: Outfit, sans-serif;
-    background:
-      radial-gradient(900px 500px at 8% -10%, rgba(140, 60, 255, 0.45), transparent 60%),
-      radial-gradient(700px 420px at 100% 0%, rgba(70, 20, 140, 0.55), transparent 55%),
-      var(--bg);
-  }
-  body:before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
-    background-size: 72px 72px;
-    mask-image: radial-gradient(circle at 50% 20%, black, transparent 75%);
-  }
-  main { position: relative; max-width: 1180px; margin: 0 auto; padding: 36px 22px 64px; }
-  header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-end; margin-bottom: 28px; }
-  h1 { font-family: Syne, sans-serif; font-size: clamp(42px, 6vw, 76px); line-height: 0.9; margin: 0; letter-spacing: -0.04em; }
-  h1 span { color: var(--violet); }
-  .lede { color: var(--muted); max-width: 360px; margin: 8px 0 0; }
-  .pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: rgba(12, 8, 22, 0.7); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b6478; box-shadow: 0 0 0 0 rgba(178, 107, 255, 0.5); }
-  .pill.on .dot { background: #c084fc; animation: pulse 1.6s infinite; }
-  @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(178, 107, 255, 0); } }
-  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; }
-  .card {
-    background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
-    border: 1px solid var(--line);
-    border-radius: 22px;
-    padding: 18px;
-    backdrop-filter: blur(10px);
-  }
-  label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px; }
-  input {
-    width: 100%;
-    border: 1px solid var(--line);
-    background: rgba(0,0,0,0.35);
-    color: white;
-    border-radius: 12px;
-    padding: 12px 14px;
-    font: inherit;
-    outline: none;
-  }
-  input:focus { border-color: var(--violet); }
-  .actions { display: flex; gap: 10px; margin-top: 16px; }
-  button {
-    border: 0;
-    border-radius: 14px;
-    padding: 13px 16px;
-    font: inherit;
-    font-weight: 560;
-    cursor: pointer;
-  }
-  .go { flex: 1; color: white; background: linear-gradient(135deg, var(--violet), var(--violet-2)); box-shadow: 0 10px 30px rgba(122, 60, 255, 0.35); }
-  .stop { color: #f3e9ff; background: transparent; border: 1px solid var(--line); }
-  .msg { min-height: 22px; color: #d7c4ff; font-size: 14px; margin-top: 10px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .stat b { display: block; font-family: Syne, sans-serif; font-size: 34px; letter-spacing: -0.04em; }
-  .stat span { color: var(--muted); font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
-  th { text-align: left; color: var(--muted); font-weight: 460; padding: 8px 6px; }
-  td { padding: 9px 6px; border-top: 1px solid rgba(255,255,255,0.06); }
-  .tag { border-radius: 999px; padding: 3px 8px; font-size: 12px; }
-  .ok { color: #d7b6ff; background: rgba(178, 107, 255, 0.16); }
-  .rejete { color: #ffb4c8; background: rgba(255, 80, 120, 0.14); }
-  .melange { color: #ffe0a8; background: rgba(255, 190, 80, 0.14); }
-  .attente { color: var(--muted); background: rgba(255,255,255,0.05); }
-  .scroll { max-height: 420px; overflow: auto; }
-  @media (max-width: 900px) {
-    .grid, .stats { grid-template-columns: 1fr 1fr; }
-    .grid { grid-template-columns: 1fr; }
-  }
+  body { margin:0; min-height:100vh; color:var(--ink); background:radial-gradient(900px 480px at 0% 0%, #3a1d0c, transparent 55%), var(--bg); font-family:"Segoe UI", Arial, sans-serif; }
+  main { max-width:1200px; margin:0 auto; padding:28px 18px 50px; }
+  h1 { margin:0; font-size:40px; font-weight:700; letter-spacing:-0.03em; }
+  h1 span { color:var(--orange); }
+  p { color:var(--muted); margin:8px 0 0; }
+  .top { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:8px 12px; background:#1c1511; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#6d5b50; margin-right:8px; }
+  .on .dot { background:var(--orange); }
+  .stats, .cols { display:grid; gap:12px; }
+  .stats { grid-template-columns:repeat(4, 1fr); margin:22px 0; }
+  .cols { grid-template-columns:320px 1fr; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .stat b { display:block; font-size:28px; }
+  .stat span, label { color:var(--muted); font-size:13px; }
+  label { display:block; margin:12px 0 6px; }
+  input { width:100%; background:#120e0c; color:white; border:1px solid var(--line); border-radius:10px; padding:11px 12px; font:inherit; }
+  .actions { display:flex; gap:8px; margin-top:14px; }
+  button { border:0; border-radius:10px; padding:11px 12px; font:inherit; cursor:pointer; }
+  .go { flex:1; background:var(--orange); color:#1a0d06; font-weight:700; }
+  .ghost, .mini { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .mini { padding:6px 8px; }
+  .msg { min-height:20px; color:#ffc49a; margin-top:8px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:8px 6px; }
+  td { padding:8px 6px; border-top:1px solid #2b211c; }
+  .scroll { max-height:520px; overflow:auto; }
+  h2 { margin:0 0 10px; font-size:18px; }
+  .mask { position:fixed; inset:0; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center; padding:18px; }
+  .mask.show { display:flex; }
+  .window { width:min(1100px, 100%); background:#14110f; border:1px solid #5a3518; border-radius:18px; overflow:hidden; }
+  .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; }
+  canvas { width:100%; height:min(70vh, 680px); background:#141414; display:block; cursor:crosshair; }
+  .proxybox { width:min(480px, 100%); }
+  .proxybox p { margin:6px 0; }
+  @media (max-width:900px) { .stats, .cols { grid-template-columns:1fr 1fr; } .cols { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <main>
-  <header>
+  <div class="top">
     <div>
-      <h1>Slither<br><span>control</span></h1>
-      <p class="lede">Envoie tes bots, suis les proxys, et regarde qui est encore en jeu.</p>
+      <h1>Slither <span>desk</span></h1>
+      <p>Envoie les bots, suis chaque joueur, ouvre son proxy ou prends le contrôle.</p>
     </div>
     <div class="pill" id="pill"><span class="dot"></span><span id="pillText">hors ligne</span></div>
-  </header>
+  </div>
   <section class="stats" id="stats"></section>
-  <section class="grid" style="margin-top:18px">
+  <section class="cols">
     <form class="card" id="form">
       <label>Pseudo</label>
-      <input name="name" value="free israel">
+      <input name="name" maxlength="21" value="free israel">
       <label>Count</label>
-      <input name="count" type="number" min="1" max="200" value="30">
+      <input name="count" type="number" min="1" value="30">
       <label>Serveur</label>
       <input name="server" type="number" value="5724">
       <label>Skin</label>
       <input name="skin" type="number" min="0" max="64" value="61">
       <div class="actions">
-        <button class="go" type="submit">Envoyer les bots</button>
-        <button class="stop" id="stop" type="button">Stop</button>
+        <button class="go" type="submit">Envoyer</button>
+        <button class="ghost" id="stop" type="button">Stop</button>
       </div>
       <div class="msg" id="msg"></div>
     </form>
     <div class="card">
-      <strong>Proxys de cette vague</strong>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>IP</th><th>OK</th><th>Rejet</th><th>En jeu</th><th></th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
+      <h2>Joueurs</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>Pseudo</th><th>Position</th><th>Mort</th><th>Taille</th><th>Proxy</th><th></th></tr></thead>
+        <tbody id="players"></tbody>
+      </table></div>
     </div>
   </section>
+  <section class="card" style="margin-top:12px">
+    <h2>Proxys</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>IP</th><th>OK</th><th>Rejet</th><th>En jeu</th><th>État</th><th></th></tr></thead>
+      <tbody id="proxies"></tbody>
+    </table></div>
+  </section>
 </main>
+<div class="mask" id="play">
+  <div class="window">
+    <div class="bar"><strong id="playTitle">Contrôle</strong><button class="ghost" id="closePlay" type="button">Fermer</button></div>
+    <canvas id="game" width="1100" height="680"></canvas>
+  </div>
+</div>
+<div class="mask" id="proxy">
+  <div class="window proxybox">
+    <div class="bar"><strong>Proxy</strong><button class="ghost" id="closeProxy" type="button">Fermer</button></div>
+    <div id="proxyBody" style="padding:0 14px 16px"></div>
+  </div>
+</div>
 <script>
-const stats = [
-  ["count", "Count"],
-  ["alive", "En jeu"],
-  ["connecting", "Connexion"],
-  ["dead", "Morts maintenant"],
-  ["deaths", "Morts total"],
-  ["proxyTotal", "Proxys en stock"],
-  ["proxyOk", "Proxys ok"],
-  ["proxyBad", "Proxys rejetes"]
-];
-function card(label, value) {
-  return `<article class="stat card"><b>${value ?? 0}</b><span>${label}</span></article>`;
+const keys = [["count","Count"],["alive","En jeu"],["connecting","Connexion"],["dead","Morts"],["deaths","Morts total"],["proxyTotal","Proxys"],["proxyOk","Proxys ok"],["proxyBad","Proxys rejetés"]];
+const palette = ["#5cff4a","#ff5a36","#4ad4ff","#ffe14a","#d44aff","#4a6bff","#fff","#ff9a3c","#7dffa2","#ff6b93","#8fd0ff","#e8ff8a"];
+let players = [];
+let slot = null;
+let boosting = false;
+let lastSend = 0;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function paint(data) {
+  document.getElementById("stats").innerHTML = keys.map(([k,n]) => `<article class="card stat"><b>${data[k] ?? 0}</b><span>${n}</span></article>`).join("");
+  document.getElementById("pill").classList.toggle("on", !!data.running);
+  document.getElementById("pillText").textContent = data.running ? `en ligne · ${data.server || "-"}` : "hors ligne";
+  players = data.players || [];
+  document.getElementById("players").innerHTML = players.map(p => `<tr>
+    <td>${p.slot + 1}</td><td>${p.name}</td><td>${p.x} , ${p.y}</td><td>${p.dead ? "oui" : "non"}</td><td>${p.size}</td>
+    <td><button class="mini" data-proxy="${p.slot}">${p.proxyState}</button></td>
+    <td><button class="mini" data-play="${p.slot}">Contrôler</button></td></tr>`).join("") || `<tr><td colspan="7">Aucun joueur.</td></tr>`;
+  document.getElementById("proxies").innerHTML = (data.rows || []).map(r => `<tr>
+    <td>${r.host}</td><td>${r.ok}</td><td>${r.fail}</td><td>${r.live}</td><td>${r.state}</td>
+    <td><button class="mini" data-host="${r.host}">Détails</button></td></tr>`).join("") || `<tr><td colspan="6">Aucun proxy utilisé.</td></tr>`;
 }
 async function refresh() {
-  const data = await (await fetch("/api/status")).json();
-  document.getElementById("stats").innerHTML = stats.map(([key, label]) => card(label, data[key])).join("");
-  document.getElementById("pill").classList.toggle("on", !!data.running);
-  document.getElementById("pillText").textContent = data.running ? `en ligne · serveur ${data.server || "-"}` : "hors ligne";
-  document.getElementById("rows").innerHTML = (data.rows || []).map(row =>
-    `<tr><td>${row.host}</td><td>${row.ok}</td><td>${row.fail}</td><td>${row.live}</td><td><span class="tag ${row.state}">${row.state}</span></td></tr>`
-  ).join("") || `<tr><td colspan="5">Aucun bot lancé.</td></tr>`;
+  paint(await (await fetch("/api/status")).json());
 }
-document.getElementById("form").onsubmit = async (event) => {
-  event.preventDefault();
-  const body = Object.fromEntries(new FormData(event.target));
-  const res = await fetch("/api/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const data = await res.json();
+document.body.addEventListener("click", (event) => {
+  const play = event.target.dataset.play;
+  const proxy = event.target.dataset.proxy;
+  const host = event.target.dataset.host;
+  if (play != null) openPlay(Number(play));
+  if (proxy != null) openProxy(players.find(p => p.slot === Number(proxy)));
+  if (host != null) {
+    const row = players.find(p => p.proxyHost === host) || {};
+    openProxy({ ...row, proxyHost: host });
+  }
+});
+function openProxy(p) {
+  if (!p) return;
+  document.getElementById("proxyBody").innerHTML = `<p>IP : ${p.proxyHost || ""}</p><p>Port : ${p.proxyPort || ""}</p><p>Utilisateur : ${p.proxyUser || ""}</p><p>Mot de passe : ${p.proxyPass || ""}</p><p>OK : ${p.proxyOk || 0}</p><p>Rejet : ${p.proxyFail || 0}</p><p>État : ${p.proxyState || ""}</p>`;
+  document.getElementById("proxy").classList.add("show");
+}
+document.getElementById("closeProxy").onclick = () => document.getElementById("proxy").classList.remove("show");
+function project(x, y, hx, hy) {
+  const scale = Math.min(canvas.width, canvas.height) / 980;
+  return [canvas.width / 2 + (x - hx) * scale, canvas.height / 2 + (y - hy) * scale];
+}
+function chain(points, color, width, hx, hy) {
+  if (!points || points.length < 2) return;
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round"; ctx.beginPath();
+  points.forEach((pt, i) => {
+    const p = project(pt[0], pt[1], hx, hy);
+    if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+  });
+  ctx.stroke();
+  const head = project(points.at(-1)[0], points.at(-1)[1], hx, hy);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(head[0], head[1], width, 0, Math.PI * 2); ctx.fill();
+}
+async function frame() {
+  if (slot == null) return;
+  const view = await (await fetch("/api/view?slot=" + slot)).json();
+  const hx = view.x || 0, hy = view.y || 0;
+  ctx.fillStyle = "#141414"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  (view.foods || []).forEach(f => {
+    const p = project(f[0], f[1], hx, hy);
+    ctx.fillStyle = palette[(f[3] || 0) % palette.length];
+    ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(2, f[2] || 2), 0, Math.PI * 2); ctx.fill();
+  });
+  (view.preys || []).forEach(f => {
+    const p = project(f[0], f[1], hx, hy);
+    ctx.fillStyle = palette[(f[3] || 0) % palette.length];
+    ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(4, (f[2] || 3) * 1.4), 0, Math.PI * 2); ctx.fill();
+  });
+  (view.others || []).forEach(s => chain(s.pts, palette[(s.cv || 0) % palette.length], 7, hx, hy));
+  chain(view.me, "#ff7a1a", 9, hx, hy);
+  document.getElementById("playTitle").textContent = `${view.name || ""} · taille ${view.size || 0} · ${view.alive ? "vivant" : "mort"}`;
+}
+function openPlay(next) {
+  slot = next; boosting = false;
+  document.getElementById("play").classList.add("show");
+  if (!openPlay.timer) openPlay.timer = setInterval(frame, 70);
+  frame();
+}
+async function steer(event) {
+  if (slot == null) return;
+  const now = performance.now();
+  if (now - lastSend < 30 && event.type === "mousemove") return;
+  lastSend = now;
+  const rect = canvas.getBoundingClientRect();
+  const dx = (event.clientX - rect.left) * (canvas.width / rect.width) - canvas.width / 2;
+  const dy = (event.clientY - rect.top) * (canvas.height / rect.height) - canvas.height / 2;
+  await fetch("/api/control", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ slot, angle: Math.atan2(dy, dx), boost: boosting, on: true }) });
+}
+canvas.onmousemove = steer;
+canvas.onmousedown = (e) => { boosting = true; steer(e); };
+canvas.onmouseup = (e) => { boosting = false; steer(e); };
+canvas.onmouseleave = () => { boosting = false; };
+document.getElementById("closePlay").onclick = async () => {
+  document.getElementById("play").classList.remove("show");
+  if (slot != null) await fetch("/api/control", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ slot, on: false }) });
+  slot = null;
+};
+document.getElementById("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  body.name = String(body.name || "").slice(0, 21);
+  const data = await (await fetch("/api/start", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) })).json();
   document.getElementById("msg").textContent = data.message || "";
   refresh();
 };
 document.getElementById("stop").onclick = async () => {
-  const res = await fetch("/api/stop", { method: "POST", body: "{}" });
-  const data = await res.json();
+  const data = await (await fetch("/api/stop", { method:"POST", body:"{}" })).json();
   document.getElementById("msg").textContent = data.message || "";
   refresh();
 };

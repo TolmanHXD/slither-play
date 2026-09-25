@@ -95,11 +95,12 @@ class Pilot:
         self.length = 0
         self.sides = {}
         self.proxy = None
+        self.manual = False
 
 
 def pilot_names(base, count):
     count = max(1, int(count))
-    nick = (base or "jjj")[:24]
+    nick = (base or "jjj")[:21]
     return [nick] * count
 
 
@@ -901,12 +902,12 @@ async def net_main(game, names, server_id, skin=None):
     proxies = load_proxies(PROXY_FILE)
     if proxies:
         if not game.board_mode:
-            print(f"proxys {len(proxies)}, 1 ip pour 2 joueurs", flush=True)
+            print(f"proxys {len(proxies)}, 1 ip pour 1 joueur", flush=True)
     elif not game.board_mode:
         print("pas de proxy", flush=True)
     for pilot in game.pilots:
         if proxies:
-            pilot.proxy = proxies[(pilot.slot // 2) % len(proxies)]
+            pilot.proxy = proxies[pilot.slot % len(proxies)]
 
     def pick_server():
         found = party.choose_servers(party.fetch_servers(list_url), "", None, server_id)
@@ -1596,7 +1597,7 @@ def choose_move(hx, hy, facing, pts, others, foods, preys, length, msl, grd, loc
     if pile and front_dist < 48:
         boost = False
     blocked = sum(1 for dist in danger if dist < 110)
-    if blocked >= 6 or (front_dist < 130 and danger[bin_of(desired)] < 80):
+    if blocked >= 5:
         gap_angle = facing
         gap_room = -1.0
         for index in range(BINS):
@@ -1606,7 +1607,7 @@ def choose_move(hx, hy, facing, pts, others, foods, preys, length, msl, grd, loc
                 gap_angle = index * ARC + ARC * 0.5
         desired = gap_angle
         dodging = True
-        if length > 16 and danger[bin_of(desired)] > 120:
+        if length > 8:
             boost = True
     for row in others:
         if row[0] in local_ids or row[0] == shield_sid or not row[1]:
@@ -1638,6 +1639,8 @@ def team_plan(game, pilot):
 
 
 def autoplay(game, pilot):
+    if pilot.manual:
+        return
     with game.lock:
         hx = pilot.hx
         hy = pilot.hy
@@ -1925,6 +1928,30 @@ def snapshot_state(game):
         else:
             state = "attente"
         rows.append({"host": host, "ok": row["ok"], "fail": row["fail"], "live": live, "state": state})
+    players = []
+    for pilot in pilots:
+        proxy = pilot.proxy or {}
+        host = proxy.get("host", "")
+        row = stats.get(host, {"ok": 0, "fail": 0})
+        players.append(
+            {
+                "slot": pilot.slot,
+                "name": pilot.name,
+                "x": round(pilot.hx, 1),
+                "y": round(pilot.hy, 1),
+                "dead": pilot.status == "Mort" or not pilot.alive,
+                "alive": pilot.alive,
+                "status": pilot.status,
+                "size": pilot.length,
+                "proxyHost": host,
+                "proxyPort": proxy.get("port", ""),
+                "proxyUser": proxy.get("user", ""),
+                "proxyPass": proxy.get("password", ""),
+                "proxyOk": row["ok"],
+                "proxyFail": row["fail"],
+                "proxyState": "ok" if row["ok"] and not row["fail"] else "melange" if row["ok"] else "rejete" if row["fail"] else "attente",
+            }
+        )
     return {
         "running": bots_running(),
         "server": server_id,
@@ -1941,14 +1968,63 @@ def snapshot_state(game):
         "connOk": sum(row["ok"] for row in rows),
         "connBad": sum(row["fail"] for row in rows),
         "rows": rows,
+        "players": players,
     }
+
+
+def thin_points(points, step=2):
+    if len(points) <= 24:
+        return [[round(x, 1), round(y, 1)] for x, y in points]
+    slim = points[::step]
+    if slim[-1] != points[-1]:
+        slim.append(points[-1])
+    return [[round(x, 1), round(y, 1)] for x, y in slim]
+
+
+def view_state(game, slot):
+    with game.lock:
+        pilot = next((item for item in game.pilots if item.slot == slot), None)
+    if pilot is None:
+        return None
+    state = game.snapshot(pilot.hx, pilot.hy, pilot.self_id)
+    me = thin_points(state["pts"], 1)
+    others = []
+    for _sid, body, cv, nick, _fast in state["others"]:
+        others.append({"cv": cv, "nick": nick, "pts": thin_points(body)})
+    foods = [[round(food[0], 1), round(food[1], 1), food[2], food[3]] for food in state["foods"][:700]]
+    preys = [[round(prey[0], 1), round(prey[1], 1), prey[2], prey[3]] for prey in state["preys"][:120]]
+    return {
+        "slot": slot,
+        "name": pilot.name,
+        "alive": pilot.alive,
+        "x": pilot.hx,
+        "y": pilot.hy,
+        "size": len(me),
+        "me": me,
+        "others": others,
+        "foods": foods,
+        "preys": preys,
+    }
+
+
+def control_bot(game, slot, angle, boost, active):
+    with game.lock:
+        pilot = next((item for item in game.pilots if item.slot == slot), None)
+        if pilot is None:
+            return False
+        pilot.manual = bool(active)
+    if active and angle is not None:
+        set_drive(game, pilot, float(angle), bool(boost))
+    elif not active:
+        set_drive(game, pilot, pilot.sang / 251 * TAU, False)
+    return True
 
 
 def launch_bots(game, name, count, server, skin):
     if bots_running():
         return False, "Des bots tournent deja. Arrete-les d'abord."
-    if not 1 <= count <= 200:
-        return False, "Le count doit etre entre 1 et 200."
+    if count < 1:
+        return False, "Le count doit etre au moins 1."
     if skin is not None and not 0 <= skin <= 64:
         return False, "Skin entre 0 et 64."
     game.quit = False
@@ -1990,6 +2066,21 @@ def serve_dashboard(game):
             if path == "/api/status":
                 self._send(200, json.dumps(snapshot_state(game)), "application/json")
                 return
+            if path == "/api/view":
+                query = self.path.split("?", 1)[1] if "?" in self.path else ""
+                slot = 0
+                for part in query.split("&"):
+                    if part.startswith("slot="):
+                        try:
+                            slot = int(part.split("=", 1)[1])
+                        except ValueError:
+                            slot = 0
+                view = view_state(game, slot)
+                if view is None:
+                    self._send(404, json.dumps({"ok": False}), "application/json")
+                    return
+                self._send(200, json.dumps(view), "application/json")
+                return
             if path not in ("/", "/dashboard"):
                 self._send(404, "introuvable", "text/plain; charset=utf-8")
                 return
@@ -2007,6 +2098,16 @@ def serve_dashboard(game):
                 data = json.loads(raw.decode("utf-8") or "{}")
             except json.JSONDecodeError:
                 data = {}
+            if path == "/api/control":
+                try:
+                    slot = int(data.get("slot") or 0)
+                    angle = None if data.get("angle") is None else float(data.get("angle"))
+                except (TypeError, ValueError):
+                    self._send(400, json.dumps({"ok": False}), "application/json")
+                    return
+                ok = control_bot(game, slot, angle, bool(data.get("boost")), bool(data.get("on", True)))
+                self._send(200, json.dumps({"ok": ok}), "application/json")
+                return
             if path == "/api/stop":
                 ok, message = stop_bots(game)
             elif path == "/api/start":
@@ -2018,7 +2119,7 @@ def serve_dashboard(game):
                 except (TypeError, ValueError):
                     self._send(400, json.dumps({"ok": False, "message": "Nombres invalides."}), "application/json")
                     return
-                ok, message = launch_bots(game, str(data.get("name") or "jjj"), count, server, skin)
+                ok, message = launch_bots(game, str(data.get("name") or "jjj")[:21], count, server, skin)
             else:
                 self._send(404, json.dumps({"ok": False, "message": "introuvable"}), "application/json")
                 return
