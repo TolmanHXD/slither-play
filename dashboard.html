@@ -58,7 +58,7 @@
   <section class="cols">
     <form class="card" id="form">
       <label>Pseudo</label>
-      <input name="name" maxlength="21" value="free israel">
+      <input name="name" maxlength="23" value="free israel">
       <label>Count</label>
       <input name="count" type="number" min="1" value="30">
       <label>Serveur</label>
@@ -204,7 +204,7 @@ document.getElementById("closePlay").onclick = async () => {
 document.getElementById("form").onsubmit = async (e) => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.target));
-  body.name = String(body.name || "").slice(0, 21);
+  body.name = String(body.name || "").slice(0, 23);
   const data = await (await fetch("/api/start", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) })).json();
   document.getElementById("msg").textContent = data.message || "";
   refresh();

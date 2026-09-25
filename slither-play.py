@@ -100,7 +100,7 @@ class Pilot:
 
 def pilot_names(base, count):
     count = max(1, int(count))
-    nick = (base or "jjj")[:21]
+    nick = (base or "jjj")[:23]
     return [nick] * count
 
 
@@ -2119,7 +2119,7 @@ def serve_dashboard(game):
                 except (TypeError, ValueError):
                     self._send(400, json.dumps({"ok": False, "message": "Nombres invalides."}), "application/json")
                     return
-                ok, message = launch_bots(game, str(data.get("name") or "jjj")[:21], count, server, skin)
+                ok, message = launch_bots(game, str(data.get("name") or "jjj")[:23], count, server, skin)
             else:
                 self._send(404, json.dumps({"ok": False, "message": "introuvable"}), "application/json")
                 return
