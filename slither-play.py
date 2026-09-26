@@ -1988,9 +1988,18 @@ def view_state(game, slot):
         return None
     state = game.snapshot(pilot.hx, pilot.hy, pilot.self_id)
     me = thin_points(state["pts"], 1)
+    me_cv = 0
+    me_fast = False
+    grd = 0
+    with game.lock:
+        grd = int(game.grd or 0)
+        snake = game.snakes.get(pilot.self_id) if pilot.self_id is not None else None
+        if snake:
+            me_cv = int(snake.get("cv") or 0)
+            me_fast = bool(snake.get("fast"))
     others = []
-    for _sid, body, cv, nick, _fast in state["others"]:
-        others.append({"cv": cv, "nick": nick, "pts": thin_points(body)})
+    for _sid, body, cv, nick, fast in state["others"]:
+        others.append({"cv": cv, "nick": nick, "fast": bool(fast), "pts": thin_points(body, 1)})
     foods = [[round(food[0], 1), round(food[1], 1), food[2], food[3]] for food in state["foods"][:700]]
     preys = [[round(prey[0], 1), round(prey[1], 1), prey[2], prey[3]] for prey in state["preys"][:120]]
     return {
@@ -2000,6 +2009,9 @@ def view_state(game, slot):
         "x": pilot.hx,
         "y": pilot.hy,
         "size": len(me),
+        "cv": me_cv,
+        "fast": me_fast,
+        "grd": grd,
         "me": me,
         "others": others,
         "foods": foods,
@@ -2063,6 +2075,16 @@ def serve_dashboard(game):
 
         def do_GET(self):
             path = self.path.split("?", 1)[0]
+            if path.startswith("/s/"):
+                name = os.path.basename(path)
+                target = os.path.join(ROOT, "s", name)
+                allowed = {"bg54.jpg": "image/jpeg", "gbg.jpg": "image/jpeg", "look.js": "application/javascript; charset=utf-8"}
+                if name not in allowed or not os.path.isfile(target):
+                    self._send(404, "introuvable", "text/plain; charset=utf-8")
+                    return
+                with open(target, "rb") as handle:
+                    self._send(200, handle.read(), allowed[name])
+                return
             if path == "/api/status":
                 self._send(200, json.dumps(snapshot_state(game)), "application/json")
                 return
