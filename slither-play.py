@@ -707,7 +707,7 @@ SKINS = (
 
 
 PROXY_FILE = os.path.join(ROOT, "proxy.txt")
-RECORD_FILE = os.path.join(ROOT, "best-size.json")
+RECORD_FILE = os.path.join(ROOT, "bot-record.json")
 IP_LINE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
 _record_lock = threading.Lock()
 _record_name = ""
@@ -2022,16 +2022,11 @@ def snapshot_state(game):
         else:
             state = "attente"
         rows.append({"host": host, "ok": row["ok"], "fail": row["fail"], "live": live, "state": state})
-    with game.lock:
-        board = list(game.board)
     top_name, top_size = "", 0
-    for nick, score, _cv in board:
-        if score > top_size:
-            top_name, top_size = nick or "?", score
-    if top_size <= 0:
-        for pilot in pilots:
-            if pilot.alive and pilot.length > top_size:
-                top_name, top_size = pilot.name, pilot.length
+    for pilot in pilots:
+        if not pilot.alive or pilot.length <= top_size:
+            continue
+        top_name, top_size = f"#{pilot.slot + 1} {pilot.name}", pilot.length
     if top_size > 0:
         note_record(top_name, top_size)
     players = []

@@ -114,7 +114,7 @@ function esc(value) {
 }
 function paint(data) {
   const cards = keys.map(([k,n]) => `<article class="card stat"><b>${data[k] ?? 0}</b><span>${n}</span></article>`).join("");
-  const leaders = `<article class="card stat"><b>${data.topSize ?? 0}</b><span>Plus grand · ${esc(data.topName || "—")}</span></article><article class="card stat"><b>${data.recordSize ?? 0}</b><span>Record · ${esc(data.recordName || "—")}</span></article>`;
+  const leaders = `<article class="card stat"><b>${data.topSize ?? 0}</b><span>Plus grand bot · ${esc(data.topName || "—")}</span></article><article class="card stat"><b>${data.recordSize ?? 0}</b><span>Record bot · ${esc(data.recordName || "—")}</span></article>`;
   document.getElementById("stats").innerHTML = cards + leaders;
   document.getElementById("pill").classList.toggle("on", !!data.running);
   document.getElementById("pillText").textContent = data.running ? `en ligne · ${data.server || "-"}` : "hors ligne";
