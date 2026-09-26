@@ -1226,72 +1226,57 @@ def path_blocked(others, hx, hy, tx, ty):
 def meal_plan(foods, preys, others, hx, hy, length):
     nearby = []
     for xx, yy, rad, _cv in foods:
-        if rad > 0 and math.hypot(xx - hx, yy - hy) <= 800:
-            nearby.append((xx, yy, rad, rad >= 6))
+        dist = math.hypot(xx - hx, yy - hy)
+        if rad > 0 and dist <= 1400:
+            nearby.append((xx, yy, rad, dist))
     for xx, yy, rad, _cv in preys:
-        if math.hypot(xx - hx, yy - hy) <= 800:
-            nearby.append((xx, yy, max(rad, 8.0), True))
+        dist = math.hypot(xx - hx, yy - hy)
+        if dist <= 1400:
+            nearby.append((xx, yy, max(rad, 8.0), dist))
     if not nearby:
         return None
     clusters = []
-    for xx, yy, rad, big in sorted(nearby, key=lambda item: -item[2]):
+    for xx, yy, rad, _dist in sorted(nearby, key=lambda item: -item[2]):
         placed = False
         for cluster in clusters:
-            if (xx - cluster["seedx"]) ** 2 + (yy - cluster["seedy"]) ** 2 > 220 * 220:
+            if (xx - cluster["seedx"]) ** 2 + (yy - cluster["seedy"]) ** 2 > 180 * 180:
                 continue
-            if any((xx - px) ** 2 + (yy - py) ** 2 <= 100 * 100 for px, py in cluster["pts"][-16:]):
-                cluster["pts"].append((xx, yy))
-                cluster["sx"] += xx * rad
-                cluster["sy"] += yy * rad
-                cluster["mass"] += rad
-                cluster["big"] += 1 if big else 0
-                placed = True
-                break
+            cluster["pts"].append((xx, yy, rad))
+            cluster["mass"] += rad
+            if rad > cluster["top"]:
+                cluster["top"] = rad
+                cluster["tx"] = xx
+                cluster["ty"] = yy
+            placed = True
+            break
         if not placed:
             clusters.append(
                 {
                     "seedx": xx,
                     "seedy": yy,
-                    "pts": [(xx, yy)],
-                    "sx": xx * rad,
-                    "sy": yy * rad,
+                    "pts": [(xx, yy, rad)],
                     "mass": rad,
-                    "big": 1 if big else 0,
+                    "top": rad,
+                    "tx": xx,
+                    "ty": yy,
                 }
             )
     best = None
-    best_score = 0.0
+    best_rank = None
     for cluster in clusters:
         mass = cluster["mass"]
-        count = len(cluster["pts"])
-        gros = mass >= 28 or cluster["big"] >= 3 or (count >= 8 and mass >= 16)
-        cx = cluster["sx"] / mass
-        cy = cluster["sy"] / mass
+        top = cluster["top"]
+        cx, cy = cluster["tx"], cluster["ty"]
         dx, dy = cx - hx, cy - hy
         dist = math.hypot(dx, dy) or 1.0
-        if dist > 700:
-            continue
         blocked = path_blocked(others, hx, hy, cx, cy)
-        if blocked and not gros:
+        gros = top >= 4 or mass >= 12 or len(cluster["pts"]) >= 6
+        score = (top * top) * 80 + mass * 18 - dist * 0.35
+        rank = (0 if not blocked else 1, -score)
+        if best_rank is not None and rank >= best_rank:
             continue
-        if gros or cluster["big"]:
-            score = 1000 + mass * 8 - dist
-        else:
-            score = (3 + mass * 2) / dist
-        if score <= best_score:
-            continue
-        contested = False
-        if gros:
-            for row in others:
-                other = row[1]
-                if not other:
-                    continue
-                hd = math.hypot(other[-1][0] - cx, other[-1][1] - cy)
-                if hd < dist * 1.2 and hd < 480:
-                    contested = True
-                    break
-        pile_boost = gros and length > 14 and 35 < dist < 520
-        best_score = score
+        pile_boost = gros and not blocked and length > 14 and 40 < dist < 560
+        best_rank = rank
         best = (dx / dist, dy / dist, gros, pile_boost, dist)
     return best
 
