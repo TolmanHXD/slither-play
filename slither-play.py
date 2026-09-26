@@ -25,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import websockets
@@ -2166,8 +2167,12 @@ def serve_dashboard(game):
         server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     except OSError as exc:
         print(f"dashboard indisponible: {exc}", flush=True)
+        if not os.environ.get("PORT"):
+            webbrowser.open(f"http://127.0.0.1:{port}/")
         return
-    print(f"dashboard sur le port {port}", flush=True)
+    print(f"http://127.0.0.1:{port}", flush=True)
+    if not os.environ.get("PORT"):
+        threading.Timer(0.3, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
     server.serve_forever()
 
 
@@ -2239,9 +2244,12 @@ def main():
     game = Game()
     game.board_mode = args.board or args.web
     game.proxy_total = len(load_proxies(PROXY_FILE))
-    if args.web:
-        serve_dashboard(game)
-        return
+    if args.web or not os.environ.get("PORT"):
+        if not args.web:
+            threading.Thread(target=serve_dashboard, args=(game,), daemon=True).start()
+        else:
+            serve_dashboard(game)
+            return
     if not args.board:
         start_tracer_server(game)
     names = pilot_names(args.name, args.count)
