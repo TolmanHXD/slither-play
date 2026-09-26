@@ -707,7 +707,45 @@ SKINS = (
 
 
 PROXY_FILE = os.path.join(ROOT, "proxy.txt")
+RECORD_FILE = os.path.join(ROOT, "best-size.json")
 IP_LINE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+_record_lock = threading.Lock()
+_record_name = ""
+_record_size = 0
+
+
+def load_record():
+    global _record_name, _record_size
+    try:
+        with open(RECORD_FILE, encoding="utf-8") as handle:
+            data = json.load(handle)
+        _record_name = str(data.get("name") or "")
+        _record_size = int(data.get("size") or 0)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        _record_name, _record_size = "", 0
+
+
+def note_record(name, size):
+    global _record_name, _record_size
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        return
+    if size <= _record_size:
+        return
+    with _record_lock:
+        if size <= _record_size:
+            return
+        _record_name = str(name or "")
+        _record_size = size
+        try:
+            with open(RECORD_FILE, "w", encoding="utf-8") as handle:
+                json.dump({"name": _record_name, "size": _record_size}, handle)
+        except OSError:
+            pass
+
+
+load_record()
 
 
 def load_proxies(path):
@@ -873,7 +911,7 @@ async def session(game, pilot, server, version, kind, cpw, skin=None):
                         await ws.close()
                     except websockets.WebSocketException:
                         pass
-                    return False
+                    return "dead"
                 if alive and steered and (dirty or now - last_angle >= 0.016):
                     await ws.send(bytes([sang]))
                     last_angle = now
@@ -948,7 +986,10 @@ async def net_main(game, names, server_id, skin=None):
                     print(f"echec {pilot.name}{via} {server['ip']}:{server['po']}: {type(exc).__name__}: {exc}", flush=True)
             if game.quit:
                 return
-            await asyncio.sleep(1.5)
+            with game.lock:
+                died = pilot.status == "Mort"
+            if not died:
+                await asyncio.sleep(1.5)
 
     async def drive_loop():
         while not game.quit:
@@ -1221,6 +1262,57 @@ def path_blocked(others, hx, hy, tx, ty):
             if abs((x - hx) * dy - (y - hy) * dx) / dist < 28:
                 return True
     return False
+
+
+def death_feast(foods, preys, others, hx, hy, length):
+    foods_l = []
+    for xx, yy, rad, _cv in foods:
+        if rad > 0 and math.hypot(xx - hx, yy - hy) <= 1500:
+            foods_l.append((xx, yy, rad))
+    preys_l = [(xx, yy, max(float(rad), 10.0)) for xx, yy, rad, _cv in preys if math.hypot(xx - hx, yy - hy) <= 1500]
+    pieces = list(preys_l)
+    left = set(range(len(foods_l)))
+    reach2 = 200 * 200
+    while left:
+        start = left.pop()
+        group_i = [start]
+        stack = [start]
+        while stack:
+            current = stack.pop()
+            cx, cy = foods_l[current][0], foods_l[current][1]
+            near = [other for other in left if (foods_l[other][0] - cx) ** 2 + (foods_l[other][1] - cy) ** 2 <= reach2]
+            for other in near:
+                left.remove(other)
+                stack.append(other)
+                group_i.append(other)
+        group = [foods_l[index] for index in group_i]
+        mass = sum(item[2] for item in group)
+        top = max(item[2] for item in group)
+        if len(group) >= 7 or mass >= 18 or top >= 6:
+            pieces.extend(group)
+    if preys_l:
+        for xx, yy, rad in foods_l:
+            if any((xx - px) ** 2 + (yy - py) ** 2 <= 220 * 220 for px, py, _rad in preys_l):
+                pieces.append((xx, yy, rad))
+    if not pieces:
+        return None
+
+    def dist_of(item):
+        return math.hypot(item[0] - hx, item[1] - hy) or 1.0
+
+    nearest = min(pieces, key=dist_of)
+    near_dist = dist_of(nearest)
+    if near_dist < 260:
+        pool = [item for item in pieces if dist_of(item) < near_dist + 150]
+        under = [item for item in pool if dist_of(item) < 55]
+        target = min(under, key=dist_of) if under else max(pool, key=lambda item: item[2])
+    else:
+        target = max(pieces, key=lambda item: item[2])
+    dx, dy = target[0] - hx, target[1] - hy
+    dist = math.hypot(dx, dy) or 1.0
+    blocked = path_blocked(others, hx, hy, target[0], target[1])
+    boost = length > 8 and not blocked and 25 < dist < 780
+    return (dx / dist, dy / dist, True, boost, dist)
 
 
 def meal_plan(foods, preys, others, hx, hy, length):
@@ -1530,6 +1622,10 @@ def choose_move(hx, hy, facing, pts, others, foods, preys, length, msl, grd, loc
     elif threat is not None:
         desired = threat[2]
         boost = bool(threat[3])
+    elif (feast := death_feast(foods, preys, others, hx, hy, length)) is not None:
+        desired = math.atan2(feast[1], feast[0])
+        pile = True
+        boost = bool(feast[3]) and front_dist > 60
     elif shield_xy is not None:
         pdist = math.hypot(shield_xy[0] - hx, shield_xy[1] - hy)
         if pdist > 210:
@@ -1584,7 +1680,7 @@ def choose_move(hx, hy, facing, pts, others, foods, preys, length, msl, grd, loc
         if abs(ang_delta(cleared, desired)) < 1.15:
             desired = cleared
     friend_limit = 46 if rally_xy is not None else 80
-    if friend is not None and not dodging and friend[0] < friend_limit and (threat is None or friend[0] < threat[1]):
+    if friend is not None and not dodging and not pile and friend[0] < friend_limit and (threat is None or friend[0] < threat[1]):
         desired = friend[1]
         boost = friend[0] < 50 and length > 12
     if grd > 1000 and math.hypot(hx - grd, hy - grd) > grd * 0.94 and threat is None:
@@ -1926,6 +2022,18 @@ def snapshot_state(game):
         else:
             state = "attente"
         rows.append({"host": host, "ok": row["ok"], "fail": row["fail"], "live": live, "state": state})
+    with game.lock:
+        board = list(game.board)
+    top_name, top_size = "", 0
+    for nick, score, _cv in board:
+        if score > top_size:
+            top_name, top_size = nick or "?", score
+    if top_size <= 0:
+        for pilot in pilots:
+            if pilot.alive and pilot.length > top_size:
+                top_name, top_size = pilot.name, pilot.length
+    if top_size > 0:
+        note_record(top_name, top_size)
     players = []
     for pilot in pilots:
         proxy = pilot.proxy or {}
@@ -1967,6 +2075,10 @@ def snapshot_state(game):
         "connBad": sum(row["fail"] for row in rows),
         "rows": rows,
         "players": players,
+        "topName": top_name,
+        "topSize": top_size,
+        "recordName": _record_name,
+        "recordSize": _record_size,
     }
 
 
