@@ -811,6 +811,64 @@ async def open_proxy_socket(proxy, host, port):
     raise last_error or OSError(f"proxy {proxy['host']} injoignable")
 
 
+async def proxy_answers(proxy, host, port):
+    loop = asyncio.get_running_loop()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setblocking(False)
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        await asyncio.wait_for(loop.sock_connect(sock, (proxy["host"], proxy["port"])), 8)
+        token = base64.b64encode(f"{proxy['user']}:{proxy['password']}".encode()).decode()
+        target = f"{host}:{port}"
+        request = (
+            f"CONNECT {target} HTTP/1.1\r\n"
+            f"Host: {target}\r\n"
+            f"Proxy-Authorization: Basic {token}\r\n"
+            f"\r\n"
+        ).encode()
+        await loop.sock_sendall(sock, request)
+        data = bytearray()
+
+        async def read_header():
+            while b"\r\n\r\n" not in data and len(data) <= 8192:
+                chunk = await loop.sock_recv(sock, 1)
+                if not chunk:
+                    return False
+                data.extend(chunk)
+            return b" 200 " in bytes(data).split(b"\r\n", 1)[0]
+
+        return await asyncio.wait_for(read_header(), 8)
+    except Exception:
+        return False
+    finally:
+        sock.close()
+
+
+async def working_proxies(game, proxies, host, port, needed):
+    good = []
+    gate = asyncio.Semaphore(40)
+
+    async def one(proxy):
+        if game.quit:
+            return
+        async with gate:
+            with game.lock:
+                filled = len(good) >= needed
+            if filled or game.quit:
+                return
+            ok = await proxy_answers(proxy, host, port)
+            with game.lock:
+                if ok and len(good) < needed:
+                    good.append(proxy)
+                elif not ok:
+                    stat = game.proxy_stats.setdefault(proxy["host"], {"ok": 0, "fail": 0})
+                    stat["fail"] += 1
+                game.status = f"test proxys {len(good)}/{needed}"
+
+    await asyncio.gather(*(one(proxy) for proxy in proxies))
+    return good
+
+
 def skin_name(skin):
     for number, name in SKINS:
         if number == skin:
@@ -944,14 +1002,8 @@ async def net_main(game, names, server_id, skin=None):
     game.pilots = [Pilot(nick, colors[index % len(colors)], index) for index, nick in enumerate(names)]
     game.name = names[0]
     proxies = load_proxies(PROXY_FILE)
-    if proxies:
-        if not game.board_mode:
-            print(f"proxys {len(proxies)}, 1 ip pour 1 joueur", flush=True)
-    elif not game.board_mode:
+    if not proxies and not game.board_mode:
         print("pas de proxy", flush=True)
-    for pilot in game.pilots:
-        if proxies:
-            pilot.proxy = proxies[pilot.slot % len(proxies)]
 
     def pick_server():
         found = party.choose_servers(party.fetch_servers(list_url), "", None, server_id)
@@ -969,6 +1021,25 @@ async def net_main(game, names, server_id, skin=None):
         if not game.board_mode:
             print("serveur introuvable", flush=True)
         return
+    if proxies:
+        needed = max(1, (len(game.pilots) + 2) // 3)
+        with game.lock:
+            game.status = f"test proxys 0/{needed}"
+        good = await working_proxies(game, proxies, server["ip"], server["po"], needed)
+        if game.quit:
+            return
+        if not good:
+            with game.lock:
+                game.status = "aucun proxy ne repond"
+            if not game.board_mode:
+                print("aucun proxy ne repond", flush=True)
+            return
+        for pilot in game.pilots:
+            pilot.proxy = good[(pilot.slot // 3) % len(good)]
+        if not game.board_mode:
+            print(f"{len(good)} proxys repondent, 3 joueurs par ip", flush=True)
+        with game.lock:
+            game.status = "connexion"
 
     async def pilot_loop(pilot):
         while not game.quit:

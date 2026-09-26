@@ -117,7 +117,8 @@ function paint(data) {
   const leaders = `<article class="card stat"><b>${data.topSize ?? 0}</b><span>Plus grand bot · ${esc(data.topName || "—")}</span></article><article class="card stat"><b>${data.recordSize ?? 0}</b><span>Record bot · ${esc(data.recordName || "—")}</span></article>`;
   document.getElementById("stats").innerHTML = cards + leaders;
   document.getElementById("pill").classList.toggle("on", !!data.running);
-  document.getElementById("pillText").textContent = data.running ? `en ligne · ${data.server || "-"}` : "hors ligne";
+  const state = data.status && data.status !== "en jeu" && data.status !== "connexion" ? ` · ${data.status}` : "";
+  document.getElementById("pillText").textContent = data.running ? `en ligne · ${data.server || "-"}${state}` : "hors ligne";
   players = data.players || [];
   document.getElementById("players").innerHTML = players.map(p => `<tr>
     <td>${p.slot + 1}</td><td>${p.name}</td><td>${p.x} , ${p.y}</td><td>${p.dead ? "oui" : "non"}</td><td>${p.size}</td>
