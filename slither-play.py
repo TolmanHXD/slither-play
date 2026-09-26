@@ -427,7 +427,7 @@ def move_snake(game, pilot, cmd, data):
             gap = now_tick - previous_tick
             rush = snake.get("rush", gap) * 0.65 + gap * 0.35
             snake["rush"] = rush
-            snake["fast"] = rush < 0.045
+            snake["fast"] = rush < (0.07 if snake.get("fast") else 0.04)
         snake["tick"] = now_tick
         if len(snake["pts"]) > 160:
             del snake["pts"][:-160]
@@ -947,9 +947,21 @@ async def net_main(game, names, server_id, skin=None):
                     print(f"echec {pilot.name}{via} {server['ip']}:{server['po']}: {type(exc).__name__}: {exc}", flush=True)
             if game.quit:
                 return
-            await asyncio.sleep(4)
+            await asyncio.sleep(1.5)
 
-    await asyncio.gather(*(pilot_loop(pilot) for pilot in game.pilots))
+    async def drive_loop():
+        while not game.quit:
+            if game.board_mode:
+                for pilot in list(game.pilots):
+                    if pilot.alive and not pilot.manual:
+                        autoplay(game, pilot)
+            await asyncio.sleep(0.05)
+
+    driver = asyncio.create_task(drive_loop())
+    try:
+        await asyncio.gather(*(pilot_loop(pilot) for pilot in game.pilots))
+    finally:
+        driver.cancel()
 
 
 def network(game, names, server_id, skin=None):
