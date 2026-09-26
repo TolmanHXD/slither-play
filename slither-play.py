@@ -773,37 +773,42 @@ def load_proxies(path):
 
 
 async def open_proxy_socket(proxy, host, port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setblocking(False)
+    last_error = None
     loop = asyncio.get_running_loop()
-    try:
-        await asyncio.wait_for(loop.sock_connect(sock, (proxy["host"], proxy["port"])), 8)
-        token = base64.b64encode(f"{proxy['user']}:{proxy['password']}".encode()).decode()
-        target = f"{host}:{port}"
-        request = (
-            f"CONNECT {target} HTTP/1.1\r\n"
-            f"Host: {target}\r\n"
-            f"Proxy-Authorization: Basic {token}\r\n"
-            f"\r\n"
-        )
-        await loop.sock_sendall(sock, request.encode())
-        data = b""
-        while b"\r\n\r\n" not in data:
-            chunk = await asyncio.wait_for(loop.sock_recv(sock, 1), 8)
-            if not chunk:
-                raise OSError(f"proxy {proxy['host']} ferme")
-            data += chunk
-            if len(data) > 8192:
-                break
-        status = data.split(b"\r\n", 1)[0]
-        if b" 200 " not in status:
-            raise OSError(f"proxy {proxy['host']} {status.decode('latin1', 'replace').strip()}")
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        return sock
-    except Exception:
-        sock.close()
-        raise
+    token = base64.b64encode(f"{proxy['user']}:{proxy['password']}".encode()).decode()
+    target = f"{host}:{port}"
+    request = (
+        f"CONNECT {target} HTTP/1.1\r\n"
+        f"Host: {target}\r\n"
+        f"Proxy-Authorization: Basic {token}\r\n"
+        f"Connection: keep-alive\r\n"
+        f"\r\n"
+    ).encode()
+    for _attempt in range(4):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(False)
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            await asyncio.wait_for(loop.sock_connect(sock, (proxy["host"], proxy["port"])), 12)
+            await loop.sock_sendall(sock, request)
+            data = b""
+            while b"\r\n\r\n" not in data:
+                chunk = await asyncio.wait_for(loop.sock_recv(sock, 1), 12)
+                if not chunk:
+                    raise OSError(f"proxy {proxy['host']} ferme")
+                data += chunk
+                if len(data) > 8192:
+                    break
+            status = data.split(b"\r\n", 1)[0]
+            if b" 200 " not in status:
+                raise OSError(f"proxy {proxy['host']} {status.decode('latin1', 'replace').strip()}")
+            return sock
+        except Exception as exc:
+            last_error = exc
+            sock.close()
+            await asyncio.sleep(0.05)
+    raise last_error or OSError(f"proxy {proxy['host']} injoignable")
 
 
 def skin_name(skin):
@@ -827,7 +832,7 @@ async def session(game, pilot, server, version, kind, cpw, skin=None):
         kwargs = {
             "additional_headers": headers,
             "max_size": None,
-            "open_timeout": 8,
+            "open_timeout": 15,
             "ping_interval": None,
             "compression": None,
         }
@@ -851,7 +856,7 @@ async def session(game, pilot, server, version, kind, cpw, skin=None):
                 with game.lock:
                     alive = pilot.alive
                     protocol = game.protocol
-                if not alive and now - started > 12 and game.server_id == 0:
+                if not alive and now - started > 25 and game.server_id == 0:
                     if not game.board_mode:
                         print("pas de partie sur ce serveur", flush=True)
                     return False
@@ -989,7 +994,7 @@ async def net_main(game, names, server_id, skin=None):
             with game.lock:
                 died = pilot.status == "Mort"
             if not died:
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.08)
 
     async def drive_loop():
         while not game.quit:
